@@ -1,0 +1,44 @@
+name: OKX Market Scan
+
+on:
+  schedule:
+    - cron: "10 */4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run scanner
+        run: python okx_market_scanner.py
+
+      - name: Commit reports
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add okx_market_report.csv okx_market_report.json
+          git commit -m "Update OKX market reports" || echo "No changes to commit"
+          git push
+
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: okx-market-report
+          path: |
+            okx_market_report.csv
+            okx_market_report.json
