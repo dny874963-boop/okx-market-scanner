@@ -2,7 +2,7 @@ name: OKX Market Scan
 
 on:
   schedule:
-    - cron: "10 */4 * * *"
+    - cron: "47 * * * *"
   workflow_dispatch:
 
 permissions:
