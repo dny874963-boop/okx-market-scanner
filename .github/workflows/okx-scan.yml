@@ -2,7 +2,7 @@ name: OKX Market Scan
 
 on:
   schedule:
-    - cron: "47 * * * *"
+    - cron: "7,27,47 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -34,6 +34,74 @@ jobs:
           git add okx_market_report.csv okx_market_report.json
           git commit -m "Update OKX market reports" || echo "No changes to commit"
           git push
+
+      - name: Send Telegram alert
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import urllib.parse
+          import urllib.request
+
+          token = os.environ.get("TELEGRAM_BOT_TOKEN")
+          chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+
+          if not token or not chat_id:
+              raise SystemExit("Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID")
+
+          with open("okx_market_report.json", "r", encoding="utf-8") as f:
+              report = json.load(f)
+
+          items = report.get("WATCH_TRIGGER", [])
+
+          if not items:
+              print("No WATCH_TRIGGER items. No Telegram alert sent.")
+              raise SystemExit(0)
+
+          fields = [
+              "symbol",
+              "price",
+              "trigger",
+              "stop_loss",
+              "tp1",
+              "tp2",
+              "risk_usd",
+              "reward2_usd",
+              "reward_risk",
+              "distance_to_trigger_pct",
+              "quote_volume_24h",
+              "universe_rank",
+          ]
+
+          parts = [
+              "OKX WATCH_TRIGGER",
+              "בדיקה ידנית בלבד. לא פקודת קנייה ולא ייעוץ פיננסי.",
+              "",
+          ]
+
+          for item in items:
+              parts.append(f"--- {item.get('symbol', 'חסר בדוח')} ---")
+              for field in fields:
+                  parts.append(f"{field}: {item.get(field, 'חסר בדוח')}")
+              parts.append("")
+
+          text = "\n".join(parts)
+
+          url = f"https://api.telegram.org/bot{token}/sendMessage"
+
+          for i in range(0, len(text), 3500):
+              chunk = text[i:i + 3500]
+              data = urllib.parse.urlencode({
+                  "chat_id": chat_id,
+                  "text": chunk,
+              }).encode("utf-8")
+              urllib.request.urlopen(url, data=data, timeout=20)
+
+          print("Telegram alert sent.")
+          PY
 
       - name: Upload report
         uses: actions/upload-artifact@v4
